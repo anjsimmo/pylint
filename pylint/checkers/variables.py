@@ -959,13 +959,7 @@ class VariablesChecker(BaseChecker):
 
         name = node.name
         frame = stmt.scope()
-        # if the name node is used as a function default argument's value or as
-        # a decorator, then start from the parent frame of the function instead
-        # of the function frame - and thus open an inner class scope
-        if utils.is_ancestor_name(frame, node):
-            start_index = len(self._to_consume) - 2
-        else:
-            start_index = len(self._to_consume) - 1
+        start_index = len(self._to_consume) - 1
 
         undefined_variable_is_enabled = self.linter.is_message_enabled(
             "undefined-variable"
@@ -979,16 +973,23 @@ class VariablesChecker(BaseChecker):
         # pylint: disable=too-many-nested-blocks; refactoring this block is a pain.
         for i in range(start_index, -1, -1):
             current_consumer = self._to_consume[i]
-            # if the current scope is a class scope but it's not the inner
-            # scope, ignore it. This prevents to access this scope instead of
-            # the globals one in function members when there are some common
-            # names.
-            if current_consumer.scope_type == "class" and i != start_index:
-                # The only exceptions are: when the variable forms an iter within a
-                # comprehension scope; and/or when used as a default, decorator,
-                # or annotation within a function.
-                if self._ignore_class_scope(node):
+
+            if current_consumer.scope_type == "class":
+                # The list of base classes in the class definition is not part
+                # of the class scope
+                if utils.is_ancestor_name(current_consumer.node, node):
                     continue
+
+                # if the current scope is a class scope but it's not the inner
+                # scope, ignore it. This prevents to access this scope instead of
+                # the globals one in function members when there are some common
+                # names.
+                if i != start_index:
+                    # The only exceptions are: when the variable forms an iter
+                    # within a comprehension scope; is an ancestor name, and/or
+                    # when used as a default, decorator, or annotation within a function.
+                    if self._ignore_class_scope(node):
+                        continue
 
             if current_consumer.scope_type == "function":
                 in_annotation_or_default_or_decorator = self._defined_in_function_definition(
@@ -1479,13 +1480,19 @@ class VariablesChecker(BaseChecker):
         #    tp = 2
         #    def func(self, arg=tp):
         #        ...
+        # class C:
+        #    class Tp:
+        #        pass
+        #    class D(Tp):
+        #        ...
 
         name = node.name
         frame = node.statement().scope()
         in_annotation_or_default_or_decorator = self._defined_in_function_definition(
             node, frame
         )
-        if in_annotation_or_default_or_decorator:
+        in_ancestor_list = utils.is_ancestor_name(frame, node)
+        if in_annotation_or_default_or_decorator or in_ancestor_list:
             frame_locals = frame.parent.scope().locals
         else:
             frame_locals = frame.locals

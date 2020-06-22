@@ -512,6 +512,7 @@ class NamesConsumer:
 
     def __init__(self, node, scope_type):
         self._atomic = ScopeConsumer(copy.copy(node.locals), {}, scope_type)
+        self.node = node
 
     def __repr__(self):
         msg = "\nto_consume : {:s}\n".format(
@@ -961,11 +962,7 @@ class VariablesChecker(BaseChecker):
         # if the name node is used as a function default argument's value or as
         # a decorator, then start from the parent frame of the function instead
         # of the function frame - and thus open an inner class scope
-        if (
-            utils.is_default_argument(node)
-            or utils.is_func_decorator(node)
-            or utils.is_ancestor_name(frame, node)
-        ):
+        if utils.is_ancestor_name(frame, node):
             start_index = len(self._to_consume) - 2
         else:
             start_index = len(self._to_consume) - 1
@@ -976,6 +973,8 @@ class VariablesChecker(BaseChecker):
         used_before_assignment_is_enabled = self.linter.is_message_enabled(
             "used-before-assignment"
         )
+
+        deepest_function = True
 
         # iterates through parent scopes, from the inner to the outer
         base_scope_type = self._to_consume[start_index].scope_type
@@ -991,6 +990,22 @@ class VariablesChecker(BaseChecker):
                 # comprehension scope; and/or when used as a default, decorator,
                 # or annotation within a function.
                 if self._ignore_class_scope(node):
+                    continue
+
+            if deepest_function and current_consumer.scope_type == "function":
+                in_annotation_or_default_or_decorator = self._defined_in_function_definition(
+                    node, frame
+                )
+                if in_annotation_or_default_or_decorator:
+                    # ignore function scope if is an annotation/default/decorator, as not in the body
+                    deepest_function = False
+                    continue
+
+            if current_consumer.scope_type == "lambda":
+                in_lambda_default = self._defined_in_lambda_definition(
+                    node, current_consumer.node
+                )
+                if in_lambda_default:
                     continue
 
             # the name has already been consumed, only check it's not a loop
@@ -1277,6 +1292,10 @@ class VariablesChecker(BaseChecker):
                 )
             )
         return in_annotation_or_default_or_decorator
+
+    @staticmethod
+    def _defined_in_lambda_definition(node, frame):
+        return utils.is_default_argument(node, frame)
 
     @staticmethod
     def _in_lambda_or_comprehension_body(

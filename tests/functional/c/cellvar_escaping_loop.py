@@ -20,9 +20,9 @@ def good_case2():
 def good_case3():
     """No problems here."""
     lst = []
-    for i in range(10):
-        lst.append(lambda i=i: i)
-
+    for k in [[1, 2, 3], [4, 5]]:
+        lst.append(lambda k=[j for j in k]: k)
+        #lst.append(lambda k=k: k)
 
 def good_case4():
     """No problems here."""

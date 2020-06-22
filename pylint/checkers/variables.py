@@ -974,8 +974,6 @@ class VariablesChecker(BaseChecker):
             "used-before-assignment"
         )
 
-        deepest_function = True
-
         # iterates through parent scopes, from the inner to the outer
         base_scope_type = self._to_consume[start_index].scope_type
         # pylint: disable=too-many-nested-blocks; refactoring this block is a pain.
@@ -992,13 +990,12 @@ class VariablesChecker(BaseChecker):
                 if self._ignore_class_scope(node):
                     continue
 
-            if deepest_function and current_consumer.scope_type == "function":
+            if current_consumer.scope_type == "function":
                 in_annotation_or_default_or_decorator = self._defined_in_function_definition(
-                    node, frame
+                    node, current_consumer.node
                 )
                 if in_annotation_or_default_or_decorator:
                     # ignore function scope if is an annotation/default/decorator, as not in the body
-                    deepest_function = False
                     continue
 
             if current_consumer.scope_type == "lambda":
